@@ -8,8 +8,9 @@ public class Program {
     public static void main(String[] args) {
 
         Code test = new Code();
-        BigInteger toby = test.h("0000000");
-        System.out.println(toby);
+
+        String origin = test.findOrigin(1d56a37fb6b08aa709fe90e12ca59e12);
+        System.out.println(test.findPlain(origin, BigInteger.valueOf(1d56a37fb6b08aa709fe90e12ca59e12)));
 
     }
 

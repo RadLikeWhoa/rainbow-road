@@ -8,18 +8,25 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Created by Sabakuno on 16.05.17.
+ * @author Sacha Schmid
+ * @author Tobias Baumgartner
+ * @author Rinesch Murugathas
  */
 public class Rainbow {
-    
+
+    // working hash is included in the rainbow table and returns a result
+    // test hash is not included in the rainbow table and returns no result
+
     private final String WORKING_HASH = "99016e4198c78f19eca4ceb724c884ae";
     private final String TEST_HASH = "1d56a37fb6b08aa709fe90e12ca59e12";
+
+    // switch expected result using selectedHash
+
+    private String selectedHash = WORKING_HASH;
 
     private int chainLength = 2000;
     private int passwords = 2000;
     private int passwordLength = 7;
-
-    private String selectedHash = WORKING_HASH;
 
     private MessageDigest md = MessageDigest.getInstance("MD5");
 
@@ -43,50 +50,80 @@ public class Rainbow {
         System.out.println("DONE: Plaintext is " + test.find(hash));
     }
 
+    // generate table for the first 2000 7-character passwords
+
     private void generateTable() throws UnsupportedEncodingException {
         int i = 0;
 
         while (i < passwords) {
             int j = 0;
 
+            // since the passwords are just hex representations of incrementing numbers,
+            // we can just use Integer.toHexString
+
             String source = String.format("%" + passwordLength + "s", Integer.toHexString(i)).replace(' ', '0');
             String result = source;
+
+            // go through the chain, hashing and reducing at each step of the chain
 
             while (j < chainLength) {
                 BigInteger hashed = h(result);
                 result = reduce(hashed, j);
                 j++;
 
+                // check if the hash is included in the table, if it is not, the hash
+                // cannot be cracked using the table
+
                 if (hashed.toString(16).equals(selectedHash)) {
                     System.out.println("INFO: Hash included...");
                 }
             }
+
+            // remember the last and first element of the chain
+            // this is reversed to make lookups easier later on
 
             matches.put(result, source);
             i++;
         }
     }
 
-    // Hash function
+    // hash a string using md5
+
     private BigInteger h(String input) throws UnsupportedEncodingException {
         return new BigInteger(1, md.digest(input.getBytes("UTF-8")));
     }
 
+    // reduce a string following the algorithm provided in class
+
     private String reduce(BigInteger hashed, int level) {
+
+        // increment the hash by the current level (H + Stufe)
+
         hashed = hashed.add(BigInteger.valueOf(level));
 
         List<BigInteger> results = new ArrayList<>();
 
         for (int i = 1; i <= passwordLength; i++) {
+
+            // calculate the current character index and the next hash (ri, H)
+
             results.add(0, hashed.mod(BigInteger.valueOf(characters.length)));
             hashed = hashed.divide(BigInteger.valueOf(characters.length));
         }
+
+        // map the character indices to the actual characters and
+        // return the reduced value
 
         return results.stream()
                 .map(r -> characters[r.intValue()])
                 .map(String::valueOf)
                 .collect(Collectors.joining(""));
     }
+
+    // step through the chain to see if we find any reduced values that
+    // are final values of a chain
+    // if we have an origin, we can start going through its chain to look
+    // for the plaintext
 
     private String find(BigInteger input) throws UnsupportedEncodingException {
         int c = 0;
@@ -96,6 +133,8 @@ public class Rainbow {
         while (c < chainLength) {
             String r = reduce(input, c);
 
+            // keep going if the reduced value is not a final value of a chain
+
             if (!matches.containsKey(r)) {
                 c++;
             } else {
@@ -103,8 +142,13 @@ public class Rainbow {
             }
         }
 
+        // we cannot crack the hash if we are unable to find a chain
+        // origin for the hash, i.e. the hash is not included
+
         throw new InternalError("No origin found for hash");
     }
+
+    // step through a chain to find the plaintext for a hash value
 
     private String findPlain(String input, BigInteger targetHash) throws UnsupportedEncodingException {
         System.out.println("DONE: Origin found: " + input);
@@ -114,10 +158,15 @@ public class Rainbow {
         BigInteger current = h(input);
         int c = 0;
 
+        // attempt to find the targetHash anywhere in the chain
+
         while (c < chainLength && !current.equals(targetHash)) {
             match = reduce(current, c++);
             current = h(match);
         }
+
+        // if we've stepped through the entire chain that means that
+        // the hash is not included
 
         if (c == chainLength) {
             throw new InternalError("No plaintext found for hash");

@@ -66,7 +66,6 @@ public class Rainbow {
                 // cannot be cracked using the table
 
                 if (hashed.toString(16).equals(selectedHash)) {
-                    System.out.println("INFO: Hash included... ");
                     check = true;
                 }
             }

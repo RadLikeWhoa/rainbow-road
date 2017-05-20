@@ -10,11 +10,18 @@ import java.util.stream.Collectors;
 /**
  * Created by Sabakuno on 16.05.17.
  */
-public class Code {
+public class Rainbow {
+    
+    private final String WORKING_HASH = "99016e4198c78f19eca4ceb724c884ae";
+    private final String TEST_HASH = "1d56a37fb6b08aa709fe90e12ca59e12";
 
     private int chainLength = 2000;
     private int passwords = 2000;
     private int passwordLength = 7;
+
+    private String selectedHash = WORKING_HASH;
+
+    private MessageDigest md = MessageDigest.getInstance("MD5");
 
     private char[] characters = new char[] {
             '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
@@ -23,23 +30,36 @@ public class Code {
 
     private HashMap<String, String> matches = new HashMap<>(passwords);
 
-    public Code() {
+    private Rainbow() throws NoSuchAlgorithmException, UnsupportedEncodingException {
         generateTable();
     }
 
-    private void generateTable() {
+    public static void main(String[] args) throws NoSuchAlgorithmException, UnsupportedEncodingException {
+        System.out.println("TASK: Generating table...");
+        Rainbow test = new Rainbow();
+        System.out.println("DONE: Table generated...");
+
+        BigInteger hash = new BigInteger(test.selectedHash, 16);
+        System.out.println("DONE: Plaintext is " + test.find(hash));
+    }
+
+    private void generateTable() throws UnsupportedEncodingException {
         int i = 0;
 
         while (i < passwords) {
             int j = 0;
 
-            String source = "";
+            String source = String.format("%" + passwordLength + "s", Integer.toHexString(i)).replace(' ', '0');
             String result = source;
 
             while (j < chainLength) {
                 BigInteger hashed = h(result);
                 result = reduce(hashed, j);
                 j++;
+
+                if (hashed.toString(16).equals(selectedHash)) {
+                    System.out.println("INFO: Hash included...");
+                }
             }
 
             matches.put(result, source);
@@ -48,27 +68,11 @@ public class Code {
     }
 
     // Hash function
-    public BigInteger h(String input) {
-        MessageDigest md;
-        byte[] output;
-        try {
-            md = MessageDigest.getInstance("MD5");
-            output = md.digest(input.getBytes("UTF-8"));
-            StringBuffer sb = new StringBuffer();
-            for (int i = 0; i < output.length; i++) {
-                sb.append(Integer.toString((output[i] & 0xff) + 0x100, 16).substring(1));
-            }
-            // System.out.println(sb.toString());
-            return new BigInteger(output);
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
-        }
-        return BigInteger.ZERO;
+    private BigInteger h(String input) throws UnsupportedEncodingException {
+        return new BigInteger(1, md.digest(input.getBytes("UTF-8")));
     }
 
-    public String reduce(BigInteger hashed, int level) {
+    private String reduce(BigInteger hashed, int level) {
         hashed = hashed.add(BigInteger.valueOf(level));
 
         List<BigInteger> results = new ArrayList<>();
@@ -84,30 +88,39 @@ public class Code {
                 .collect(Collectors.joining(""));
     }
 
-    public String findOrigin(BigInteger input) {
+    private String find(BigInteger input) throws UnsupportedEncodingException {
         int c = 0;
 
-        while (0 < chainLength) {
+        System.out.println("TASK: Looking for origin...");
+
+        while (c < chainLength) {
             String r = reduce(input, c);
 
             if (!matches.containsKey(r)) {
                 c++;
             } else {
-                return matches.get(r);
+                return findPlain(matches.get(r), input);
             }
         }
 
-        return "";
+        throw new InternalError("No origin found for hash");
     }
 
-    public String findPlain(String input, BigInteger targetHash) {
+    private String findPlain(String input, BigInteger targetHash) throws UnsupportedEncodingException {
+        System.out.println("DONE: Origin found: " + input);
+        System.out.println("TASK: Looking for plaintext for hash '" + selectedHash + "'...");
+
         String match = input;
         BigInteger current = h(input);
         int c = 0;
 
-        while (!current.equals(targetHash)) {
+        while (c < chainLength && !current.equals(targetHash)) {
             match = reduce(current, c++);
             current = h(match);
+        }
+
+        if (c == chainLength) {
+            throw new InternalError("No plaintext found for hash");
         }
 
         return match;

@@ -14,15 +14,7 @@ import java.util.stream.Collectors;
  */
 public class Rainbow {
 
-    // working hash is included in the rainbow table and returns a result
-    // test hash is not included in the rainbow table and returns no result
-
-    private final String WORKING_HASH = "99016e4198c78f19eca4ceb724c884ae";
-    private final String TEST_HASH = "1d56a37fb6b08aa709fe90e12ca59e12";
-
-    // switch expected result using selectedHash
-
-    private String selectedHash = WORKING_HASH;
+    private String selectedHash = "1d56a37fb6b08aa709fe90e12ca59e12";
 
     private int chainLength = 2000;
     private int passwords = 2000;
@@ -58,16 +50,15 @@ public class Rainbow {
         while (i < passwords) {
             int j = 0;
 
-            // since the passwords are just hex representations of incrementing numbers,
-            // we can just use Integer.toHexString
+            boolean check = false;
 
-            String source = String.format("%" + passwordLength + "s", Integer.toHexString(i)).replace(' ', '0');
+            String source = generatePassword(i);
             String result = source;
 
             // go through the chain, hashing and reducing at each step of the chain
 
             while (j < chainLength) {
-                BigInteger hashed = h(result);
+                BigInteger hashed = hash(result);
                 result = reduce(hashed, j);
                 j++;
 
@@ -75,8 +66,13 @@ public class Rainbow {
                 // cannot be cracked using the table
 
                 if (hashed.toString(16).equals(selectedHash)) {
-                    System.out.println("INFO: Hash included...");
+                    System.out.println("INFO: Hash included... ");
+                    check = true;
                 }
+            }
+
+            if (check) {
+                System.out.println("INFO: Hash is included in chain " + source + " => " + result);
             }
 
             // remember the last and first element of the chain
@@ -87,9 +83,23 @@ public class Rainbow {
         }
     }
 
+    // generate a password based on a number
+
+    private String generatePassword(int num) {
+        StringBuilder s = new StringBuilder("0000000");
+
+        for (int pos = passwordLength - 1; pos >= 0 && num > 0 ; pos--) {
+            char digit = characters[num % characters.length];
+            s.setCharAt(pos, digit);
+            num = num / characters.length;
+        }
+
+        return s.toString();
+    }
+
     // hash a string using md5
 
-    private BigInteger h(String input) throws UnsupportedEncodingException {
+    private BigInteger hash(String input) throws UnsupportedEncodingException {
         return new BigInteger(1, md.digest(input.getBytes("UTF-8")));
     }
 
@@ -126,17 +136,25 @@ public class Rainbow {
     // for the plaintext
 
     private String find(BigInteger input) throws UnsupportedEncodingException {
-        int c = 0;
+        int c = chainLength - 1;
 
         System.out.println("TASK: Looking for origin...");
 
-        while (c < chainLength) {
-            String r = reduce(input, c);
+        while (c >= 0) {
+            int x = c;
+            BigInteger current = input;
+            String r = reduce(current, x);
+
+            while (x < chainLength) {
+                r = reduce(current, x);
+                current = hash(r);
+                x += 1;
+            }
 
             // keep going if the reduced value is not a final value of a chain
 
             if (!matches.containsKey(r)) {
-                c++;
+                c -= 1;
             } else {
                 return findPlain(matches.get(r), input);
             }
@@ -155,14 +173,14 @@ public class Rainbow {
         System.out.println("TASK: Looking for plaintext for hash '" + selectedHash + "'...");
 
         String match = input;
-        BigInteger current = h(input);
+        BigInteger current = hash(input);
         int c = 0;
 
         // attempt to find the targetHash anywhere in the chain
 
         while (c < chainLength && !current.equals(targetHash)) {
             match = reduce(current, c++);
-            current = h(match);
+            current = hash(match);
         }
 
         // if we've stepped through the entire chain that means that
